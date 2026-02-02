@@ -2,8 +2,6 @@ from flask import Flask, render_template, request, send_file, after_this_request
 import yt_dlp
 import os
 import uuid
-import threading
-import time
 
 app = Flask(__name__)
 
@@ -27,37 +25,50 @@ def download():
 
     filename = str(uuid.uuid4())
 
-    if format_type == "mp3":
-        ydl_opts = {
-            'format': 'bestaudio/best',
-            'outtmpl': f'{DOWNLOAD_DIR}/{filename}.%(ext)s',
-            'postprocessors': [{
-                'key': 'FFmpegExtractAudio',
-                'preferredcodec': 'mp3',
-                'preferredquality': '192',
-            }],
-            'quiet': True
-        }
-        final_file = f"{DOWNLOAD_DIR}/{filename}.mp3"
-    else:
-        ydl_opts = {
-            'format': 'best[filesize<50M]',
-            'outtmpl': f'{DOWNLOAD_DIR}/{filename}.%(ext)s',
-            'quiet': True 
-            'noplaylist': True,
-            'geo_bypass': True,
-            'ignoreerrors': True,
-        }
+    try:
 
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=True)
-            ext = info.get("ext")
-            final_file = f"{DOWNLOAD_DIR}/{filename}.{ext}"
+        # ===== MP3 MODE =====
+        if format_type == "mp3":
+            ydl_opts = {
+                'format': 'bestaudio/best',
+                'outtmpl': f'{DOWNLOAD_DIR}/{filename}.%(ext)s',
+                'postprocessors': [{
+                    'key': 'FFmpegExtractAudio',
+                    'preferredcodec': 'mp3',
+                    'preferredquality': '192',
+                }],
+                'quiet': True,
+                'noplaylist': True,
+                'geo_bypass': True,
+            }
 
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        ydl.extract_info(url, download=True)
+            final_file = f"{DOWNLOAD_DIR}/{filename}.mp3"
 
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                ydl.extract_info(url, download=True)
+
+        # ===== MP4 MODE =====
+        else:
+            ydl_opts = {
+                'format': 'best[filesize<50M]',
+                'outtmpl': f'{DOWNLOAD_DIR}/{filename}.%(ext)s',
+                'quiet': True,
+                'noplaylist': True,
+                'geo_bypass': True,
+                'ignoreerrors': True,
+            }
+
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(url, download=True)
+                ext = info.get("ext")
+                final_file = f"{DOWNLOAD_DIR}/{filename}.{ext}"
+
+    except Exception as e:
+        return f"Download error: {str(e)}"
+
+    # ===============================
     # AUTO DELETE AFTER DOWNLOAD
+    # ===============================
     @after_this_request
     def remove_file(response):
         try:
