@@ -1,1 +1,1 @@
-ffmpeg-full
+ffmpeg
