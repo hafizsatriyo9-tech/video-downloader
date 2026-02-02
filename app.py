@@ -8,16 +8,26 @@ app = Flask(__name__)
 DOWNLOAD_DIR = "downloads"
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
+
+# ===============================
+# HOME
+# ===============================
 @app.route("/")
 def index():
     return render_template("index.html")
 
 
+# ===============================
+# DOWNLOAD
+# ===============================
 @app.route("/download", methods=["POST"])
 def download():
 
     url = request.form.get("url")
     format_type = request.form.get("format")
+
+    if not url:
+        return "URL kosong!"
 
     filename = str(uuid.uuid4())
 
@@ -29,15 +39,21 @@ def download():
             ydl_opts = {
                 'format': 'bestaudio/best',
                 'outtmpl': f'{DOWNLOAD_DIR}/{filename}.%(ext)s',
+
                 'ffmpeg_location': '/usr/bin/ffmpeg',
+
                 'postprocessors': [{
                     'key': 'FFmpegExtractAudio',
                     'preferredcodec': 'mp3',
                     'preferredquality': '192',
                 }],
+
                 'quiet': True,
                 'noplaylist': True,
                 'geo_bypass': True,
+                'http_headers': {
+                    'User-Agent': 'Mozilla/5.0'
+                }
             }
 
             final_file = f"{DOWNLOAD_DIR}/{filename}.mp3"
@@ -46,31 +62,44 @@ def download():
                 ydl.extract_info(url, download=True)
 
 
-        # ================= MP4 =================
+        # ================= MP4 (1080p) =================
         else:
 
             ydl_opts = {
-                'format': 'best[filesize<50M]/best',
+
+                # 1080p priority + fallback auto
+                'format': '(bestvideo[height<=1080]/bestvideo)+bestaudio/best',
+
+                'merge_output_format': 'mp4',
+
                 'outtmpl': f'{DOWNLOAD_DIR}/{filename}.%(ext)s',
+
+                'ffmpeg_location': '/usr/bin/ffmpeg',
+
                 'quiet': True,
                 'noplaylist': True,
                 'geo_bypass': True,
+
+                'http_headers': {
+                    'User-Agent': 'Mozilla/5.0'
+                }
             }
 
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+
                 info = ydl.extract_info(url, download=True)
 
                 if info is None:
-                    return "Download failed: video not available or blocked"
+                    return "Download gagal atau video diblokir"
 
-                ext = info.get("ext", "mp4")
-                final_file = f"{DOWNLOAD_DIR}/{filename}.{ext}"
+                final_file = f"{DOWNLOAD_DIR}/{filename}.mp4"
 
 
     except Exception as e:
         return f"Download error: {str(e)}"
 
 
+    # ================= AUTO DELETE =================
     @after_this_request
     def remove_file(response):
         try:
@@ -83,10 +112,16 @@ def download():
     return send_file(final_file, as_attachment=True)
 
 
+# ===============================
+# KEEP ALIVE (RAILWAY)
+# ===============================
 @app.route("/ping")
 def ping():
     return jsonify({"status": "alive"})
 
 
+# ===============================
+# LOCAL RUN
+# ===============================
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
