@@ -1,133 +1,143 @@
-from flask import Flask, render_template, request, send_file, jsonify
+from flask import Flask, render_template, request, send_file, after_this_request, jsonify
 import yt_dlp
 import os
 import re
-import uuid
 
 app = Flask(__name__)
 
 DOWNLOAD_DIR = "downloads"
-
-if not os.path.exists(DOWNLOAD_DIR):
-    os.makedirs(DOWNLOAD_DIR)
+os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
 
 # =========================
-# CLEAN FILENAME (SnapTik Style Safe)
+# CLEAN FILENAME
 # =========================
-
-def clean_filename(name):
-    name = re.sub(r'[\\/*?:"<>|]', "", name)   # remove windows illegal chars
-    name = re.sub(r'[^\w\s.-]', '', name)      # remove emoji & symbols
-    name = name.replace(" ", "_")
-    return name.strip()
-
-
-# =========================
-# GET FINAL FILE AUTO
-# =========================
-
-def get_latest_file(folder):
-    files = [os.path.join(folder, f) for f in os.listdir(folder)]
-    files = [f for f in files if os.path.isfile(f)]
-    return max(files, key=os.path.getctime)
+def clean_filename(title):
+    title = re.sub(r'[\\/*?:"<>|]', "", title)
+    title = title.replace(" ", "_")
+    return title[:100]
 
 
 # =========================
 # HOME
 # =========================
-
 @app.route("/")
 def index():
     return render_template("index.html")
 
 
 # =========================
-# DOWNLOAD ROUTE
+# DOWNLOAD
 # =========================
-
 @app.route("/download", methods=["POST"])
 def download():
 
     url = request.form.get("url")
-    filetype = request.form.get("type", "mp4")  # mp4 or mp3
+    format_type = request.form.get("format")
 
     if not url:
-        return jsonify({"error": "URL kosong"}), 400
-
-    uid = str(uuid.uuid4())
-
-    base_path = f"{DOWNLOAD_DIR}/{uid}"
+        return "URL kosong!"
 
     try:
 
-        # =========================
-        # MP4 VIDEO
-        # =========================
-
-        if filetype == "mp4":
-
-            ydl_opts = {
-                'format': '(bestvideo[height<=1080]/bestvideo)+bestaudio/best',
-                'merge_output_format': 'mp4',
-                'outtmpl': base_path + '.%(ext)s',
-                'noplaylist': True,
-                'quiet': True,
-                'geo_bypass': True,
-                'http_headers': {
-                    'User-Agent': 'Mozilla/5.0'
-                }
-            }
-
-        # =========================
-        # MP3 AUDIO
-        # =========================
-
-        else:
+        # ================= MP3 =================
+        if format_type == "mp3":
 
             ydl_opts = {
                 'format': 'bestaudio/best',
-                'outtmpl': base_path + '.%(ext)s',
+                'outtmpl': f'{DOWNLOAD_DIR}/%(title)s.%(ext)s',
+
+                'ffmpeg_location': '/usr/bin/ffmpeg',
+
                 'postprocessors': [{
                     'key': 'FFmpegExtractAudio',
                     'preferredcodec': 'mp3',
                     'preferredquality': '192',
                 }],
-                'noplaylist': True,
+
                 'quiet': True,
+                'noplaylist': True,
                 'geo_bypass': True,
                 'http_headers': {
                     'User-Agent': 'Mozilla/5.0'
                 }
             }
 
-        # =========================
-        # DOWNLOAD PROCESS
-        # =========================
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
 
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=True)
+                info = ydl.extract_info(url, download=True)
 
-        title = info.get("title", "video")
-        safe_title = clean_filename(title)
+                if info is None:
+                    return "Download gagal"
 
-        final_file = get_latest_file(DOWNLOAD_DIR)
+                title = info.get("title", "audio")
+                safe_title = clean_filename(title)
 
-        new_path = f"{DOWNLOAD_DIR}/{safe_title}.{final_file.split('.')[-1]}"
+                final_file = f"{DOWNLOAD_DIR}/{safe_title}.mp3"
 
-        os.rename(final_file, new_path)
 
-        return send_file(new_path, as_attachment=True)
+        # ================= MP4 (1080p) =================
+        else:
+
+            ydl_opts = {
+                'format': '(bestvideo[height<=1080]/bestvideo)+bestaudio/best',
+                'merge_output_format': 'mp4',
+
+                'outtmpl': f'{DOWNLOAD_DIR}/%(title)s.%(ext)s',
+
+                'ffmpeg_location': '/usr/bin/ffmpeg',
+
+                'quiet': True,
+                'noplaylist': True,
+                'geo_bypass': True,
+
+                'http_headers': {
+                    'User-Agent': 'Mozilla/5.0'
+                }
+            }
+
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+
+                info = ydl.extract_info(url, download=True)
+
+                if info is None:
+                    return "Download gagal"
+
+                title = info.get("title", "video")
+                safe_title = clean_filename(title)
+
+                final_file = f"{DOWNLOAD_DIR}/{safe_title}.mp4"
 
 
     except Exception as e:
-        print("ERROR:", e)
-        return jsonify({"error": str(e)}), 500
+        return f"Download error: {str(e)}"
+
+
+    # =========================
+    # AUTO DELETE AFTER SEND
+    # =========================
+    @after_this_request
+    def remove_file(response):
+        try:
+            os.remove(final_file)
+        except:
+            pass
+        return response
+
+
+    return send_file(final_file, as_attachment=True)
 
 
 # =========================
-# RUN LOCAL
+# KEEP ALIVE
 # =========================
+@app.route("/ping")
+def ping():
+    return jsonify({"status": "alive"})
 
+
+# =========================
+# LOCAL RUN
+# =========================
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8080)
+    app.run(host="0.0.0.0", port=5000)
