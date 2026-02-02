@@ -2,82 +2,89 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Video Downloader Pro</title>
+<title>Video Downloader</title>
 <script src="https://cdn.tailwindcss.com"></script>
 </head>
 
-<body class="bg-slate-900 text-white flex items-center justify-center min-h-screen px-4">
+<body class="bg-gray-900 text-white flex items-center justify-center min-h-screen">
 
-<div class="bg-slate-800 p-6 rounded-xl shadow-xl w-full max-w-md">
+<div class="bg-gray-800 p-6 rounded-xl shadow-lg w-full max-w-md">
 
-<h2 class="text-xl font-bold text-center mb-2">🚀 Video Downloader</h2>
-<p class="text-center text-sm text-gray-400 mb-4">
-TikTok • Instagram • X • YouTube
-</p>
+<h1 class="text-xl font-bold text-center mb-4">
+Multi Video Downloader
+</h1>
 
-<form id="form" action="/download" method="post">
+<input id="url" type="text" placeholder="Paste TikTok / IG / X / YouTube URL"
+class="w-full p-3 rounded bg-gray-700 outline-none mb-3">
 
-<input 
-type="text" 
-name="url"
-required
-placeholder="Paste video link..."
-class="w-full p-3 rounded bg-slate-700 outline-none mb-3">
-
-<select 
-name="format"
-class="w-full p-3 rounded bg-slate-700 mb-3">
-
+<select id="format" class="w-full p-3 rounded bg-gray-700 mb-3">
 <option value="mp4">MP4 Video</option>
 <option value="mp3">MP3 Audio</option>
-
 </select>
 
-<button 
-type="submit"
-class="bg-green-500 hover:bg-green-600 w-full p-3 rounded font-bold">
-
+<button onclick="startDownload()"
+class="w-full bg-blue-600 hover:bg-blue-700 p-3 rounded font-bold">
 Download
-
 </button>
 
-</form>
-
-<!-- PROGRESS BAR -->
-<div id="progressBox" class="hidden mt-4">
-
-<p class="text-sm mb-1">Downloading...</p>
-
-<div class="w-full bg-slate-700 rounded">
-<div id="bar" class="bg-green-500 h-3 rounded w-0"></div>
+<div class="mt-4 hidden" id="progressBox">
+<div class="w-full bg-gray-600 rounded">
+<div id="bar" class="bg-green-500 text-xs p-1 rounded w-0%">0%</div>
 </div>
-
 </div>
 
 </div>
 
 <script>
 
-const form = document.getElementById("form")
-const progressBox = document.getElementById("progressBox")
-const bar = document.getElementById("bar")
+async function startDownload() {
 
-form.addEventListener("submit", () => {
+let url = document.getElementById("url").value;
+let format = document.getElementById("format").value;
 
-progressBox.classList.remove("hidden")
+if(!url){
+ alert("Masukkan URL dulu!");
+ return;
+}
 
-let width = 0
+document.getElementById("progressBox").classList.remove("hidden");
 
-let loading = setInterval(() => {
-    if (width >= 90) {
-        clearInterval(loading)
-    } else {
-        width += 5
-        bar.style.width = width + "%"
-    }
-}, 400)
+let res = await fetch("/download", {
+ method: "POST",
+ headers: {"Content-Type":"application/x-www-form-urlencoded"},
+ body: `url=${encodeURIComponent(url)}&format=${format}`
+});
 
-})
+let data = await res.json();
+
+let task = data.task_id;
+let file = data.file;
+
+let timer = setInterval(async () => {
+
+ let p = await fetch("/progress/" + task);
+ let prog = await p.json();
+
+ if(prog.progress >= 0){
+
+ document.getElementById("bar").style.width = prog.progress + "%";
+ document.getElementById("bar").innerText = Math.floor(prog.progress) + "%";
+
+ }
+
+ if(prog.progress >= 100){
+ clearInterval(timer);
+ window.location = "/getfile?path=" + file;
+ }
+
+ if(prog.progress == -1){
+ clearInterval(timer);
+ alert("Download gagal!");
+ }
+
+}, 1000);
+
+}
 
 </script>
 
