@@ -1,3 +1,5 @@
 flask
 yt-dlp
 gunicorn
+werkzeug<3.0
+ffmpeg-python
