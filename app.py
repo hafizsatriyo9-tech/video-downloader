@@ -1,7 +1,7 @@
 from flask import Flask, render_template, request, send_file, after_this_request, jsonify
 import yt_dlp
 import os
-import re
+import uuid
 
 app = Flask(__name__)
 
@@ -9,26 +9,17 @@ DOWNLOAD_DIR = "downloads"
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
 
-# =========================
-# CLEAN FILENAME
-# =========================
-def clean_filename(title):
-    title = re.sub(r'[\\/*?:"<>|]', "", title)
-    title = title.replace(" ", "_")
-    return title[:100]
-
-
-# =========================
+# ===============================
 # HOME
-# =========================
+# ===============================
 @app.route("/")
 def index():
     return render_template("index.html")
 
 
-# =========================
+# ===============================
 # DOWNLOAD
-# =========================
+# ===============================
 @app.route("/download", methods=["POST"])
 def download():
 
@@ -38,6 +29,8 @@ def download():
     if not url:
         return "URL kosong!"
 
+    filename = str(uuid.uuid4())
+
     try:
 
         # ================= MP3 =================
@@ -45,7 +38,7 @@ def download():
 
             ydl_opts = {
                 'format': 'bestaudio/best',
-                'outtmpl': f'{DOWNLOAD_DIR}/%(title)s.%(ext)s',
+                'outtmpl': f'{DOWNLOAD_DIR}/{filename}.%(ext)s',
 
                 'ffmpeg_location': '/usr/bin/ffmpeg',
 
@@ -63,27 +56,23 @@ def download():
                 }
             }
 
+            final_file = f"{DOWNLOAD_DIR}/{filename}.mp3"
+
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-
-                info = ydl.extract_info(url, download=True)
-
-                if info is None:
-                    return "Download gagal"
-
-                title = info.get("title", "audio")
-                safe_title = clean_filename(title)
-
-                final_file = f"{DOWNLOAD_DIR}/{safe_title}.mp3"
+                ydl.extract_info(url, download=True)
 
 
         # ================= MP4 (1080p) =================
         else:
 
             ydl_opts = {
+
+                # 1080p priority + fallback auto
                 'format': '(bestvideo[height<=1080]/bestvideo)+bestaudio/best',
+
                 'merge_output_format': 'mp4',
 
-                'outtmpl': f'{DOWNLOAD_DIR}/%(title)s.%(ext)s',
+                'outtmpl': f'{DOWNLOAD_DIR}/{filename}.%(ext)s',
 
                 'ffmpeg_location': '/usr/bin/ffmpeg',
 
@@ -101,21 +90,16 @@ def download():
                 info = ydl.extract_info(url, download=True)
 
                 if info is None:
-                    return "Download gagal"
+                    return "Download gagal atau video diblokir"
 
-                title = info.get("title", "video")
-                safe_title = clean_filename(title)
-
-                final_file = f"{DOWNLOAD_DIR}/{safe_title}.mp4"
+                final_file = f"{DOWNLOAD_DIR}/{filename}.mp4"
 
 
     except Exception as e:
         return f"Download error: {str(e)}"
 
 
-    # =========================
-    # AUTO DELETE AFTER SEND
-    # =========================
+    # ================= AUTO DELETE =================
     @after_this_request
     def remove_file(response):
         try:
@@ -128,16 +112,16 @@ def download():
     return send_file(final_file, as_attachment=True)
 
 
-# =========================
-# KEEP ALIVE
-# =========================
+# ===============================
+# KEEP ALIVE (RAILWAY)
+# ===============================
 @app.route("/ping")
 def ping():
     return jsonify({"status": "alive"})
 
 
-# =========================
+# ===============================
 # LOCAL RUN
-# =========================
+# ===============================
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
