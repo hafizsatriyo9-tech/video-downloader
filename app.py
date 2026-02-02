@@ -12,7 +12,7 @@ os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 COOKIE_FILE = "cookies.txt"
 
 # ===============================
-# UTIL SAFE FILENAME
+# UTIL
 # ===============================
 
 def clean_filename(name):
@@ -25,6 +25,21 @@ def clean_filename(name):
 def has_ffmpeg():
     return shutil.which("ffmpeg") is not None
 
+
+# ===============================
+# BASE YT-DLP CONFIG (WAJIB)
+# ===============================
+
+BASE_YDL_OPTS = {
+    "quiet": True,
+    "noplaylist": True,
+    "geo_bypass": True,
+    "cookies": COOKIE_FILE if os.path.exists(COOKIE_FILE) else None,
+    "http_headers": {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+    },
+    "js_runtimes": ["node"]  # 🔥 KUNCI UTAMA (FIX YOUTUBE)
+}
 
 # ===============================
 # ROUTES
@@ -50,105 +65,69 @@ def download():
         return "URL kosong"
 
     try:
-
         # =====================
-        # GET VIDEO INFO FIRST
+        # GET INFO
         # =====================
-
-        with yt_dlp.YoutubeDL({'quiet': True}) as ydl:
+        with yt_dlp.YoutubeDL(BASE_YDL_OPTS) as ydl:
             info = ydl.extract_info(url, download=False)
 
-        if info is None:
+        if not info:
             return "Video tidak tersedia"
 
         title = info.get("title", "video")
         safe_title = clean_filename(title)
-
         base_path = os.path.join(DOWNLOAD_DIR, safe_title)
 
         final_file = None
 
         # =====================
-        # MP3 MODE
+        # MP3
         # =====================
-
         if format_type == "mp3":
 
             if not has_ffmpeg():
-                return "Server tidak punya ffmpeg. MP3 tidak tersedia."
+                return "Server tidak memiliki ffmpeg"
 
             ydl_opts = {
-                'format': 'bestaudio/best',
-                'outtmpl': base_path + '.%(ext)s',
-                'cookies': COOKIE_FILE if os.path.exists(COOKIE_FILE) else None,
-                'postprocessors': [{
-                    'key': 'FFmpegExtractAudio',
-                    'preferredcodec': 'mp3',
-                    'preferredquality': '192',
+                **BASE_YDL_OPTS,
+                "format": "bestaudio/best",
+                "outtmpl": base_path + ".%(ext)s",
+                "postprocessors": [{
+                    "key": "FFmpegExtractAudio",
+                    "preferredcodec": "mp3",
+                    "preferredquality": "192",
                 }],
-                'noplaylist': True,
-                'quiet': True,
-                'geo_bypass': True,
-                'http_headers': {
-                    'User-Agent': 'Mozilla/5.0'
-                }
             }
 
             final_file = base_path + ".mp3"
 
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                ydl.download([url])
-
         # =====================
-        # MP4 MODE 1080P
+        # MP4 HD 1080p
         # =====================
-
         else:
 
-            # Kalau ffmpeg ada → bisa merge 1080p
             if has_ffmpeg():
-
-                format_string = "(bestvideo[height<=1080]/bestvideo)+bestaudio/best"
-
                 ydl_opts = {
-                    'format': format_string,
-                    'merge_output_format': 'mp4',
-                    'outtmpl': base_path + '.%(ext)s',
-                    'cookies': COOKIE_FILE if os.path.exists(COOKIE_FILE) else None,
-                    'noplaylist': True,
-                    'quiet': True,
-                    'geo_bypass': True,
-                    'http_headers': {
-                        'User-Agent': 'Mozilla/5.0'
-                    }
+                    **BASE_YDL_OPTS,
+                    "format": "bestvideo[ext=mp4][height<=1080]+bestaudio[ext=m4a]/best",
+                    "merge_output_format": "mp4",
+                    "outtmpl": base_path + ".%(ext)s",
                 }
-
                 final_file = base_path + ".mp4"
-
-            # Kalau ffmpeg TIDAK ada → pakai single file
             else:
-
                 ydl_opts = {
-                    'format': 'best[ext=mp4]/best',
-                    'outtmpl': base_path + '.%(ext)s',
-                    'cookies': COOKIE_FILE if os.path.exists(COOKIE_FILE) else None,
-                    'noplaylist': True,
-                    'quiet': True,
-                    'geo_bypass': True,
-                    'http_headers': {
-                        'User-Agent': 'Mozilla/5.0'
-                    }
+                    **BASE_YDL_OPTS,
+                    "format": "best[ext=mp4]/best",
+                    "outtmpl": base_path + ".%(ext)s",
                 }
-
                 final_file = base_path + ".mp4"
 
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                ydl.download([url])
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([url])
 
         # =====================
-        # AUTO DELETE AFTER SEND
+        # AUTO DELETE
         # =====================
-
         @after_this_request
         def remove_file(response):
             try:
@@ -165,11 +144,3 @@ def download():
 
     except Exception as e:
         return f"Download error: {str(e)}"
-
-
-# ===============================
-# RUN LOCAL
-# ===============================
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
