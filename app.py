@@ -29,7 +29,6 @@ def download():
             ydl_opts = {
                 'format': 'bestaudio/best',
                 'outtmpl': f'{DOWNLOAD_DIR}/{filename}.%(ext)s',
-                'ffmpeg_location': '/usr/bin/ffmpeg',
                 'postprocessors': [{
                     'key': 'FFmpegExtractAudio',
                     'preferredcodec': 'mp3',
