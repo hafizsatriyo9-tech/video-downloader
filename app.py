@@ -43,7 +43,10 @@ def download():
         ydl_opts = {
             'format': 'best[filesize<50M]',
             'outtmpl': f'{DOWNLOAD_DIR}/{filename}.%(ext)s',
-            'quiet': True
+            'quiet': True 
+            'noplaylist': True,
+            'geo_bypass': True,
+            'ignoreerrors': True,
         }
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
