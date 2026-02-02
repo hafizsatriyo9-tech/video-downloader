@@ -61,7 +61,7 @@ def download():
             }
         }
 
-        final_file = f"{DOWNLOAD_DIR}/{filename}.mp3"
+        final_file = os.path.abspath(f"{DOWNLOAD_DIR}/{filename}.mp3")
 
     else:
 
@@ -79,7 +79,7 @@ def download():
             }
         }
 
-        final_file = f"{DOWNLOAD_DIR}/{filename}.mp4"
+        final_file = os.path.abspath(f"{DOWNLOAD_DIR}/{filename}.mp4")
 
     def run_download():
         try:
@@ -110,8 +110,8 @@ def get_file():
 
     threading.Thread(target=remove_file).start()
 
-    return send_file(path, as_attachment=True)
-
+    return send_file(path, download_name=os.path.basename(path), as_attachment=True)
+    
 
 @app.route("/ping")
 def ping():
