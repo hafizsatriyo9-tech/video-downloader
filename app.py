@@ -27,7 +27,7 @@ def has_ffmpeg():
 
 
 # ===============================
-# BASE YT-DLP CONFIG (WAJIB)
+# BASE YT-DLP CONFIG (FIXED)
 # ===============================
 
 BASE_YDL_OPTS = {
@@ -38,7 +38,9 @@ BASE_YDL_OPTS = {
     "http_headers": {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
     },
-    "js_runtimes": ["node"]  # 🔥 KUNCI UTAMA (FIX YOUTUBE)
+    "js_runtimes": {
+        "node": {}   # ✅ FORMAT BENAR (DICT)
+    }
 }
 
 # ===============================
@@ -66,7 +68,7 @@ def download():
 
     try:
         # =====================
-        # GET INFO
+        # GET VIDEO INFO
         # =====================
         with yt_dlp.YoutubeDL(BASE_YDL_OPTS) as ydl:
             info = ydl.extract_info(url, download=False)
@@ -122,11 +124,14 @@ def download():
                 }
                 final_file = base_path + ".mp4"
 
+        # =====================
+        # DOWNLOAD
+        # =====================
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([url])
 
         # =====================
-        # AUTO DELETE
+        # AUTO DELETE AFTER SEND
         # =====================
         @after_this_request
         def remove_file(response):
