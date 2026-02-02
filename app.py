@@ -1,117 +1,87 @@
-from flask import Flask, render_template, request, send_file, jsonify
+from flask import Flask, render_template, request, send_file, after_this_request, jsonify
 import yt_dlp
 import os
 import uuid
-import threading
-import time
 
 app = Flask(__name__)
 
 DOWNLOAD_DIR = "downloads"
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
-progress_data = {}
-
 @app.route("/")
 def index():
     return render_template("index.html")
 
 
-@app.route("/progress/<task_id>")
-def progress(task_id):
-    return jsonify(progress_data.get(task_id, {"progress": 0}))
-
-
 @app.route("/download", methods=["POST"])
 def download():
 
-    url = request.form["url"]
-    format_type = request.form["format"]
+    url = request.form.get("url")
+    format_type = request.form.get("format")
 
-    task_id = str(uuid.uuid4())
     filename = str(uuid.uuid4())
 
-    progress_data[task_id] = {"progress": 0}
+    try:
 
-    def hook(d):
-        if d['status'] == 'downloading':
-            percent = d.get('_percent_str', '0').replace('%', '').strip()
-            try:
-                progress_data[task_id]["progress"] = float(percent)
-            except:
-                pass
+        # ================= MP3 =================
+        if format_type == "mp3":
 
-        if d['status'] == 'finished':
-            progress_data[task_id]["progress"] = 100
-
-    if format_type == "mp3":
-
-        ydl_opts = {
-            'format': 'ba/best',
-            'outtmpl': f'{DOWNLOAD_DIR}/{filename}.%(ext)s',
-            'postprocessors': [{
-                'key': 'FFmpegExtractAudio',
-                'preferredcodec': 'mp3',
-                'preferredquality': '192',
-            }],
-            'progress_hooks': [hook],
-            'quiet': True,
-            'http_headers': {
-                'User-Agent': 'Mozilla/5.0'
+            ydl_opts = {
+                'format': 'bestaudio/best',
+                'outtmpl': f'{DOWNLOAD_DIR}/{filename}.%(ext)s',
+                'ffmpeg_location': '/usr/bin/ffmpeg',
+                'postprocessors': [{
+                    'key': 'FFmpegExtractAudio',
+                    'preferredcodec': 'mp3',
+                    'preferredquality': '192',
+                }],
+                'quiet': True,
+                'noplaylist': True,
+                'geo_bypass': True,
             }
-        }
 
-        final_file = os.path.abspath(f"{DOWNLOAD_DIR}/{filename}.mp3")
+            final_file = f"{DOWNLOAD_DIR}/{filename}.mp3"
 
-    else:
-
-        ydl_opts = {
-            'format': 'bv*+ba/best',
-            'merge_output_format': 'mp4',
-            'outtmpl': f'{DOWNLOAD_DIR}/{filename}.%(ext)s',
-            'progress_hooks': [hook],
-            'quiet': True,
-            'noplaylist': True,
-            'ignoreerrors': True,
-            'geo_bypass': True,
-            'http_headers': {
-                'User-Agent': 'Mozilla/5.0'
-            }
-        }
-
-        final_file = os.path.abspath(f"{DOWNLOAD_DIR}/{filename}.mp4")
-
-    def run_download():
-        try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                ydl.download([url])
-        except:
-            progress_data[task_id]["progress"] = -1
-
-    thread = threading.Thread(target=run_download)
-    thread.start()
-
-    return jsonify({
-        "task_id": task_id,
-        "file": final_file
-    })
+                ydl.extract_info(url, download=True)
 
 
-@app.route("/getfile")
-def get_file():
-    path = request.args.get("path")
+        # ================= MP4 =================
+        else:
 
-    def remove_file():
-        time.sleep(5)
+            ydl_opts = {
+                'format': 'best[filesize<50M]/best',
+                'outtmpl': f'{DOWNLOAD_DIR}/{filename}.%(ext)s',
+                'quiet': True,
+                'noplaylist': True,
+                'geo_bypass': True,
+            }
+
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(url, download=True)
+
+                if info is None:
+                    return "Download failed: video not available or blocked"
+
+                ext = info.get("ext", "mp4")
+                final_file = f"{DOWNLOAD_DIR}/{filename}.{ext}"
+
+
+    except Exception as e:
+        return f"Download error: {str(e)}"
+
+
+    @after_this_request
+    def remove_file(response):
         try:
-            os.remove(path)
+            os.remove(final_file)
         except:
             pass
+        return response
 
-    threading.Thread(target=remove_file).start()
 
-    return send_file(path, download_name=os.path.basename(path), as_attachment=True)
-    
+    return send_file(final_file, as_attachment=True)
+
 
 @app.route("/ping")
 def ping():
