@@ -9,7 +9,7 @@ app = Flask(__name__)
 DOWNLOAD_DIR = "downloads"
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
-# WAJIB: nama file cookies HARUS cookies.txt
+# WAJIB: cookies.txt di root project
 COOKIE_FILE = os.path.abspath("cookies.txt")
 
 # ===============================
@@ -32,15 +32,18 @@ def has_cookies():
 
 
 # ===============================
-# BASE YT-DLP CONFIG (FIXED)
+# BASE YT-DLP CONFIG (FINAL)
 # ===============================
 
 BASE_YDL_OPTS = {
     "quiet": True,
     "noplaylist": True,
     "geo_bypass": True,
+
+    # 🔐 Cookies (WAJIB untuk TikTok sensitive)
     "cookies": COOKIE_FILE if has_cookies() else None,
 
+    # 🧠 Browser headers
     "http_headers": {
         "User-Agent": (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -49,23 +52,16 @@ BASE_YDL_OPTS = {
         )
     },
 
-    # 🔥 JS runtime
+    # 🔥 JS runtime (yt-dlp terbaru)
     "js_runtimes": {
         "node": {}
     },
 
-    # 🔥 PAKSA IMPERSONATION TIKTOK
+    # 🔥 TikTok impersonation (INI KUNCI)
     "extractor_args": {
         "tiktok": {
             "impersonate": ["chrome"]
         }
-    },
-}
-
-
-    # 🔥 FORMAT BENAR UNTUK yt-dlp TERBARU
-    "js_runtimes": {
-        "node": {}
     },
 }
 
@@ -96,13 +92,13 @@ def download():
     if not url:
         return "URL kosong"
 
-    # 🔒 FORCE LOGIN UNTUK TIKTOK SENSITIVE
+    # 🔒 TikTok wajib cookies
     if "tiktok.com" in url and not has_cookies():
         return "Video TikTok ini memerlukan login (cookies.txt tidak ditemukan)"
 
     try:
         # =====================
-        # GET VIDEO INFO
+        # GET INFO
         # =====================
         with yt_dlp.YoutubeDL(BASE_YDL_OPTS) as ydl:
             info = ydl.extract_info(url, download=False)
@@ -122,7 +118,7 @@ def download():
         if format_type == "mp3":
 
             if not has_ffmpeg():
-                return "Server tidak memiliki ffmpeg (MP3 tidak tersedia)"
+                return "Server tidak memiliki ffmpeg"
 
             ydl_opts = {
                 **BASE_YDL_OPTS,
@@ -184,7 +180,6 @@ def download():
     except yt_dlp.utils.DownloadError as e:
         msg = str(e)
 
-        # 🔒 ERROR LOGIN TIKTOK / IG
         if "Log in for access" in msg or "login" in msg.lower():
             return (
                 "Platform meminta login.\n"
