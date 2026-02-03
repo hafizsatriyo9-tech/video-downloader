@@ -39,11 +39,8 @@ BASE_YDL_OPTS = {
     "quiet": True,
     "noplaylist": True,
     "geo_bypass": True,
-
-    # 🔥 PAKSA COOKIES (kalau ada)
     "cookies": COOKIE_FILE if has_cookies() else None,
 
-    # User agent desktop
     "http_headers": {
         "User-Agent": (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -51,6 +48,20 @@ BASE_YDL_OPTS = {
             "Chrome/121.0 Safari/537.36"
         )
     },
+
+    # 🔥 JS runtime
+    "js_runtimes": {
+        "node": {}
+    },
+
+    # 🔥 PAKSA IMPERSONATION TIKTOK
+    "extractor_args": {
+        "tiktok": {
+            "impersonate": ["chrome"]
+        }
+    },
+}
+
 
     # 🔥 FORMAT BENAR UNTUK yt-dlp TERBARU
     "js_runtimes": {
