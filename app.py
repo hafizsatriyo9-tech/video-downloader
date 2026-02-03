@@ -9,7 +9,8 @@ app = Flask(__name__)
 DOWNLOAD_DIR = "downloads"
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
-COOKIE_FILE = "cookies.txt"
+# WAJIB: nama file cookies HARUS cookies.txt
+COOKIE_FILE = os.path.abspath("cookies.txt")
 
 # ===============================
 # UTIL
@@ -26,6 +27,10 @@ def has_ffmpeg():
     return shutil.which("ffmpeg") is not None
 
 
+def has_cookies():
+    return os.path.exists(COOKIE_FILE) and os.path.getsize(COOKIE_FILE) > 0
+
+
 # ===============================
 # BASE YT-DLP CONFIG (FIXED)
 # ===============================
@@ -34,13 +39,23 @@ BASE_YDL_OPTS = {
     "quiet": True,
     "noplaylist": True,
     "geo_bypass": True,
-    "cookies": COOKIE_FILE if os.path.exists(COOKIE_FILE) else None,
+
+    # 🔥 PAKSA COOKIES (kalau ada)
+    "cookies": COOKIE_FILE if has_cookies() else None,
+
+    # User agent desktop
     "http_headers": {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/121.0 Safari/537.36"
+        )
     },
+
+    # 🔥 FORMAT BENAR UNTUK yt-dlp TERBARU
     "js_runtimes": {
-        "node": {}   # ✅ FORMAT BENAR (DICT)
-    }
+        "node": {}
+    },
 }
 
 # ===============================
@@ -54,17 +69,25 @@ def index():
 
 @app.route("/ping")
 def ping():
-    return jsonify({"status": "alive"})
+    return jsonify({
+        "status": "alive",
+        "ffmpeg": has_ffmpeg(),
+        "cookies": has_cookies()
+    })
 
 
 @app.route("/download", methods=["POST"])
 def download():
 
-    url = request.form.get("url")
-    format_type = request.form.get("format")
+    url = request.form.get("url", "").strip()
+    format_type = request.form.get("format", "mp4")
 
     if not url:
         return "URL kosong"
+
+    # 🔒 FORCE LOGIN UNTUK TIKTOK SENSITIVE
+    if "tiktok.com" in url and not has_cookies():
+        return "Video TikTok ini memerlukan login (cookies.txt tidak ditemukan)"
 
     try:
         # =====================
@@ -88,7 +111,7 @@ def download():
         if format_type == "mp3":
 
             if not has_ffmpeg():
-                return "Server tidak memiliki ffmpeg"
+                return "Server tidak memiliki ffmpeg (MP3 tidak tersedia)"
 
             ydl_opts = {
                 **BASE_YDL_OPTS,
@@ -115,14 +138,14 @@ def download():
                     "merge_output_format": "mp4",
                     "outtmpl": base_path + ".%(ext)s",
                 }
-                final_file = base_path + ".mp4"
             else:
                 ydl_opts = {
                     **BASE_YDL_OPTS,
                     "format": "best[ext=mp4]/best",
                     "outtmpl": base_path + ".%(ext)s",
                 }
-                final_file = base_path + ".mp4"
+
+            final_file = base_path + ".mp4"
 
         # =====================
         # DOWNLOAD
@@ -130,8 +153,11 @@ def download():
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([url])
 
+        if not os.path.exists(final_file):
+            return "File gagal dibuat"
+
         # =====================
-        # AUTO DELETE AFTER SEND
+        # AUTO DELETE
         # =====================
         @after_this_request
         def remove_file(response):
@@ -142,10 +168,19 @@ def download():
                 pass
             return response
 
-        if not os.path.exists(final_file):
-            return "File gagal dibuat"
-
         return send_file(final_file, as_attachment=True)
+
+    except yt_dlp.utils.DownloadError as e:
+        msg = str(e)
+
+        # 🔒 ERROR LOGIN TIKTOK / IG
+        if "Log in for access" in msg or "login" in msg.lower():
+            return (
+                "Platform meminta login.\n"
+                "Pastikan cookies.txt valid & belum expired."
+            )
+
+        return f"Download error: {msg}"
 
     except Exception as e:
         return f"Download error: {str(e)}"
