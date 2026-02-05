@@ -6,6 +6,22 @@
 <script src="https://cdn.tailwindcss.com"></script>
 </head>
 
+<!-- SHOPEE RANDOM POPUP -->
+<div id="shopee-popup" class="shopee-popup hidden">
+  <div class="shopee-box">
+    <span class="close-btn" onclick="closeShopee()">×</span>
+
+    <img id="shopee-img" class="shopee-img" src="" alt="Shopee Product">
+
+    <h3 id="shopee-title"></h3>
+    <p id="shopee-price"></p>
+
+    <a id="shopee-link" class="shopee-btn" target="_blank">
+      Beli di Shopee
+    </a>
+  </div>
+</div>
+
 <body class="bg-slate-900 text-white flex items-center justify-center min-h-screen px-4">
 
 <div class="bg-slate-800 p-6 rounded-xl shadow-xl w-full max-w-md">
@@ -53,11 +69,105 @@ Download
 </div>
 
 </div>
+<style>
+.shopee-popup {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+}
+
+.shopee-box {
+  background: #fff;
+  border-radius: 14px;
+  width: 90%;
+  max-width: 320px;
+  padding: 18px;
+  text-align: center;
+  position: relative;
+  animation: pop 0.3s ease;
+}
+
+@keyframes pop {
+  from { transform: scale(0.8); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+.shopee-img {
+  width: 100%;
+  border-radius: 10px;
+}
+
+.shopee-btn {
+  display: block;
+  margin-top: 12px;
+  background: #ee4d2d;
+  color: #fff;
+  padding: 12px;
+  border-radius: 8px;
+  text-decoration: none;
+  font-weight: bold;
+}
+
+.close-btn {
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  font-size: 22px;
+  cursor: pointer;
+}
+
+.hidden {
+  display: none;
+}
+</style>
 
 </div>
 
 <script>
+    
+const shopeeProducts = [
+  {
+    title: "Headset Gaming RGB",
+    price: "Rp 79.000",
+    img: "https://cf.shopee.co.id/file/sg-11134201-7rbmd-lkqk1t7u3s0e44",
+    link: "https://shopee.co.id" // GANTI ke link affiliate
+  },
+  {
+    title: "Powerbank 20000mAh",
+    price: "Rp 99.000",
+    img: "https://cf.shopee.co.id/file/sg-11134201-7rbk9-lkqk2i6rzzfgf9",
+    link: "https://shopee.co.id"
+  },
+  {
+    title: "Kabel Charger Fast Charging",
+    price: "Rp 15.000",
+    img: "https://cf.shopee.co.id/file/sg-11134201-7rbmd-lkqk3u9g4s9i90",
+    link: "https://shopee.co.id"
+  }
+];
 
+function showShopeePopup() {
+  const product = shopeeProducts[Math.floor(Math.random() * shopeeProducts.length)];
+
+  document.getElementById("shopee-img").src = product.img;
+  document.getElementById("shopee-title").innerText = product.title;
+  document.getElementById("shopee-price").innerText = product.price;
+  document.getElementById("shopee-link").href = product.link;
+
+  document.getElementById("shopee-popup").classList.remove("hidden");
+}
+
+function closeShopee() {
+  document.getElementById("shopee-popup").classList.add("hidden");
+}
+
+// tampilkan setelah 5 detik
+setTimeout(showShopeePopup, 5000);
+    
 const form = document.getElementById("form")
 const progressBox = document.getElementById("progressBox")
 const bar = document.getElementById("bar")
