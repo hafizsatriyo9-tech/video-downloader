@@ -6,25 +6,18 @@
 <script src="https://cdn.tailwindcss.com"></script>
 </head>
 
-<!-- SHOPEE RANDOM POPUP -->
-<div id="shopee-popup" class="shopee-popup hidden">
-  <div class="shopee-box">
-    <span class="close-btn" onclick="closeShopee()">×</span>
-
-    <img id="shopee-img" class="shopee-img" src="" alt="Shopee Product">
-
-    <h3 id="shopee-title"></h3>
-    <p id="shopee-price"></p>
-
-    <a id="shopee-link" class="shopee-btn" target="_blank">
-      Beli di Shopee
-    </a>
-  </div>
-</div>
-
 <body class="bg-slate-900 text-white flex items-center justify-center min-h-screen px-4">
 
-<div class="bg-slate-800 p-6 rounded-xl shadow-xl w-full max-w-md">
+<!-- FULL CLICK OVERLAY -->
+<a
+  id="globalAd"
+  href="https://shopee.co.id"
+  target="_blank"
+  class="fixed inset-0 z-[9999]"
+  style="display:none;"
+></a>
+
+<div class="bg-slate-800 p-6 rounded-xl shadow-xl w-full max-w-md z-10">
 
 <h2 class="text-xl font-bold text-center mb-2">🚀 Video Downloader</h2>
 <p class="text-center text-sm text-gray-400 mb-4">
@@ -43,152 +36,72 @@ class="w-full p-3 rounded bg-slate-700 outline-none mb-3">
 <select 
 name="format"
 class="w-full p-3 rounded bg-slate-700 mb-3">
-
 <option value="mp4">MP4 Video</option>
 <option value="mp3">MP3 Audio</option>
-
 </select>
 
 <button 
 type="submit"
 class="bg-green-500 hover:bg-green-600 w-full p-3 rounded font-bold">
-
 Download
-
 </button>
 
 </form>
 
-<!-- PROGRESS BAR -->
+<!-- PROGRESS -->
 <div id="progressBox" class="hidden mt-4">
-
 <p class="text-sm mb-1">Downloading...</p>
-
 <div class="w-full bg-slate-700 rounded">
 <div id="bar" class="bg-green-500 h-3 rounded w-0"></div>
 </div>
-
 </div>
-<style>
-.shopee-popup {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.6);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 9999;
-}
-
-.shopee-box {
-  background: #fff;
-  border-radius: 14px;
-  width: 90%;
-  max-width: 320px;
-  padding: 18px;
-  text-align: center;
-  position: relative;
-  animation: pop 0.3s ease;
-}
-
-@keyframes pop {
-  from { transform: scale(0.8); opacity: 0; }
-  to { transform: scale(1); opacity: 1; }
-}
-
-.shopee-img {
-  width: 100%;
-  border-radius: 10px;
-}
-
-.shopee-btn {
-  display: block;
-  margin-top: 12px;
-  background: #ee4d2d;
-  color: #fff;
-  padding: 12px;
-  border-radius: 8px;
-  text-decoration: none;
-  font-weight: bold;
-}
-
-.close-btn {
-  position: absolute;
-  top: 8px;
-  right: 12px;
-  font-size: 22px;
-  cursor: pointer;
-}
-
-.hidden {
-  display: none;
-}
-</style>
 
 </div>
 
 <script>
-    
-const shopeeProducts = [
-  {
-    title: "Headset Gaming RGB",
-    price: "Rp 79.000",
-    img: "https://cf.shopee.co.id/file/sg-11134201-7rbmd-lkqk1t7u3s0e44",
-    link: "https://shopee.co.id" // GANTI ke link affiliate
-  },
-  {
-    title: "Powerbank 20000mAh",
-    price: "Rp 99.000",
-    img: "https://cf.shopee.co.id/file/sg-11134201-7rbk9-lkqk2i6rzzfgf9",
-    link: "https://shopee.co.id"
-  },
-  {
-    title: "Kabel Charger Fast Charging",
-    price: "Rp 15.000",
-    img: "https://cf.shopee.co.id/file/sg-11134201-7rbmd-lkqk3u9g4s9i90",
-    link: "https://shopee.co.id"
-  }
-];
+/* ===============================
+   CLICK ANYWHERE ADS
+================================ */
 
-function showShopeePopup() {
-  const product = shopeeProducts[Math.floor(Math.random() * shopeeProducts.length)];
+// GANTI LINK IKLAN DI SINI
+const AD_LINK = "https://shopee.co.id";
 
-  document.getElementById("shopee-img").src = product.img;
-  document.getElementById("shopee-title").innerText = product.title;
-  document.getElementById("shopee-price").innerText = product.price;
-  document.getElementById("shopee-link").href = product.link;
+// tampilkan hanya 1x per user
+if (!sessionStorage.getItem("adClicked")) {
+  const ad = document.getElementById("globalAd");
+  ad.href = AD_LINK;
 
-  document.getElementById("shopee-popup").classList.remove("hidden");
+  // aktif setelah 3 detik
+  setTimeout(() => {
+    ad.style.display = "block";
+  }, 3000);
+
+  ad.addEventListener("click", () => {
+    sessionStorage.setItem("adClicked", "true");
+    ad.style.display = "none";
+  });
 }
 
-function closeShopee() {
-  document.getElementById("shopee-popup").classList.add("hidden");
-}
-
-// tampilkan setelah 5 detik
-setTimeout(showShopeePopup, 5000);
-    
-const form = document.getElementById("form")
-const progressBox = document.getElementById("progressBox")
-const bar = document.getElementById("bar")
+/* ===============================
+   PROGRESS BAR FAKE
+================================ */
+const form = document.getElementById("form");
+const progressBox = document.getElementById("progressBox");
+const bar = document.getElementById("bar");
 
 form.addEventListener("submit", () => {
+  progressBox.classList.remove("hidden");
 
-progressBox.classList.remove("hidden")
-
-let width = 0
-
-let loading = setInterval(() => {
+  let width = 0;
+  let loading = setInterval(() => {
     if (width >= 90) {
-        clearInterval(loading)
+      clearInterval(loading);
     } else {
-        width += 5
-        bar.style.width = width + "%"
+      width += 5;
+      bar.style.width = width + "%";
     }
-}, 400)
-
-})
-
+  }, 400);
+});
 </script>
 
 </body>
