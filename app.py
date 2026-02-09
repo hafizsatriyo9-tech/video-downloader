@@ -9,7 +9,6 @@ app = Flask(__name__)
 DOWNLOAD_DIR = "downloads"
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
-# WAJIB: cookies.txt di root project
 COOKIE_FILE = os.path.abspath("cookies.txt")
 
 # ===============================
@@ -22,47 +21,49 @@ def clean_filename(name):
     name = re.sub(r'\s+', '_', name)
     return name[:120]
 
-
 def has_ffmpeg():
     return shutil.which("ffmpeg") is not None
-
 
 def has_cookies():
     return os.path.exists(COOKIE_FILE) and os.path.getsize(COOKIE_FILE) > 0
 
-
 # ===============================
-# BASE YT-DLP CONFIG (FINAL)
+# BASE YT-DLP CONFIG (CLOUD SAFE)
 # ===============================
 
 BASE_YDL_OPTS = {
     "quiet": True,
+    "no_warnings": True,
     "noplaylist": True,
-    "geo_bypass": True,
 
-    # 🔐 Cookies (WAJIB untuk TikTok sensitive)
-    "cookies": COOKIE_FILE if has_cookies() else None,
+    # ✅ COOKIES (BENAR)
+    "cookiefile": COOKIE_FILE if has_cookies() else None,
 
-    # 🧠 Browser headers
+    # 🧠 Browser-like headers
+    "user_agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/120.0.0.0 Safari/537.36"
+    ),
+
     "http_headers": {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/121.0 Safari/537.36"
-        )
+        "Accept-Language": "en-US,en;q=0.9",
+        "Referer": "https://www.google.com/",
+        "DNT": "1"
     },
 
-    # 🔥 JS runtime (yt-dlp terbaru)
-    "js_runtimes": {
-        "node": {}
-    },
+    # 🐢 Anti rate-limit
+    "sleep_interval": 2,
+    "max_sleep_interval": 5,
 
-    # 🔥 TikTok impersonation (INI KUNCI)
-    "extractor_args": {
-        "tiktok": {
-            "impersonate": ["chrome"]
-        }
-    },
+    "retries": 5,
+    "fragment_retries": 5,
+    "extractor_retries": 3,
+
+    "concurrent_fragment_downloads": 1,
+    "socket_timeout": 30,
+
+    "nocheckcertificate": True,
 }
 
 # ===============================
@@ -73,7 +74,6 @@ BASE_YDL_OPTS = {
 def index():
     return render_template("index.html")
 
-
 @app.route("/ping")
 def ping():
     return jsonify({
@@ -82,19 +82,13 @@ def ping():
         "cookies": has_cookies()
     })
 
-
 @app.route("/download", methods=["POST"])
 def download():
-
     url = request.form.get("url", "").strip()
     format_type = request.form.get("format", "mp4")
 
     if not url:
         return "URL kosong"
-
-    # 🔒 TikTok wajib cookies
-    if "tiktok.com" in url and not has_cookies():
-        return "Video TikTok ini memerlukan login (cookies.txt tidak ditemukan)"
 
     try:
         # =====================
@@ -116,7 +110,6 @@ def download():
         # MP3
         # =====================
         if format_type == "mp3":
-
             if not has_ffmpeg():
                 return "Server tidak memiliki ffmpeg"
 
@@ -134,14 +127,13 @@ def download():
             final_file = base_path + ".mp3"
 
         # =====================
-        # MP4 HD 1080p
+        # MP4 (DEFAULT 720p – PALING STABIL)
         # =====================
         else:
-
             if has_ffmpeg():
                 ydl_opts = {
                     **BASE_YDL_OPTS,
-                    "format": "bestvideo[ext=mp4][height<=1080]+bestaudio[ext=m4a]/best",
+                    "format": "bv*[height<=720]+ba/b[height<=720]/best",
                     "merge_output_format": "mp4",
                     "outtmpl": base_path + ".%(ext)s",
                 }
@@ -157,8 +149,14 @@ def download():
         # =====================
         # DOWNLOAD
         # =====================
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([url])
+        try:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                ydl.download([url])
+        except Exception:
+            # 🔁 FALLBACK
+            ydl_opts["format"] = "best"
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                ydl.download([url])
 
         if not os.path.exists(final_file):
             return "File gagal dibuat"
@@ -179,13 +177,8 @@ def download():
 
     except yt_dlp.utils.DownloadError as e:
         msg = str(e)
-
-        if "Log in for access" in msg or "login" in msg.lower():
-            return (
-                "Platform meminta login.\n"
-                "Pastikan cookies.txt valid & belum expired."
-            )
-
+        if "login" in msg.lower():
+            return "Platform meminta login. Pastikan cookies.txt valid."
         return f"Download error: {msg}"
 
     except Exception as e:
