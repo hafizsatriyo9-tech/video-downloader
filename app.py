@@ -6,15 +6,18 @@ import shutil
 
 app = Flask(__name__)
 
-DOWNLOAD_DIR = "downloads"
-os.makedirs(DOWNLOAD_DIR, exist_ok=True)
+# ===============================
+# PATH & SETUP
+# ===============================
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DOWNLOAD_DIR = os.path.join(BASE_DIR, "downloads")
+COOKIE_FILE = os.path.join(BASE_DIR, "cookies.txt")
 
-COOKIE_FILE = os.path.abspath("cookies.txt")
+os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
 # ===============================
 # UTIL
 # ===============================
-
 def clean_filename(name):
     name = name.strip()
     name = re.sub(r'[\\/:*?"<>|]', '', name)
@@ -28,48 +31,39 @@ def has_cookies():
     return os.path.exists(COOKIE_FILE) and os.path.getsize(COOKIE_FILE) > 0
 
 # ===============================
-# BASE YT-DLP CONFIG (CLOUD SAFE)
+# BASE YT-DLP CONFIG
 # ===============================
-
 BASE_YDL_OPTS = {
     "quiet": True,
     "no_warnings": True,
     "noplaylist": True,
+    "cachedir": False,
 
-    # ✅ COOKIES (BENAR)
+    # Cookies YouTube
     "cookiefile": COOKIE_FILE if has_cookies() else None,
 
-    # 🧠 Browser-like headers
+    # Browser-like headers
     "user_agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
         "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/120.0.0.0 Safari/537.36"
+        "Chrome/121.0 Safari/537.36"
     ),
-
     "http_headers": {
-        "Accept-Language": "en-US,en;q=0.9",
-        "Referer": "https://www.google.com/",
-        "DNT": "1"
+        "Referer": "https://www.youtube.com/",
+        "Accept-Language": "en-US,en;q=0.9"
     },
 
-    # 🐢 Anti rate-limit
-    "sleep_interval": 2,
-    "max_sleep_interval": 5,
-
-    "retries": 5,
-    "fragment_retries": 5,
-    "extractor_retries": 3,
-
+    # Stability
+    "retries": 10,
+    "fragment_retries": 10,
+    "extractor_retries": 5,
     "concurrent_fragment_downloads": 1,
     "socket_timeout": 30,
-
-    "nocheckcertificate": True,
 }
 
 # ===============================
 # ROUTES
 # ===============================
-
 @app.route("/")
 def index():
     return render_template("index.html")
@@ -88,30 +82,24 @@ def download():
     format_type = request.form.get("format", "mp4")
 
     if not url:
-        return "URL kosong"
+        return "URL kosong", 400
 
     try:
-        # =====================
-        # GET INFO
-        # =====================
+        # ===== GET INFO =====
         with yt_dlp.YoutubeDL(BASE_YDL_OPTS) as ydl:
             info = ydl.extract_info(url, download=False)
 
         if not info:
-            return "Video tidak tersedia"
+            return "Video tidak tersedia", 400
 
         title = info.get("title", "video")
         safe_title = clean_filename(title)
         base_path = os.path.join(DOWNLOAD_DIR, safe_title)
 
-        final_file = None
-
-        # =====================
-        # MP3
-        # =====================
+        # ===== MP3 MODE =====
         if format_type == "mp3":
             if not has_ffmpeg():
-                return "Server tidak memiliki ffmpeg"
+                return "Server tidak memiliki ffmpeg", 500
 
             ydl_opts = {
                 **BASE_YDL_OPTS,
@@ -123,47 +111,32 @@ def download():
                     "preferredquality": "192",
                 }],
             }
-
             final_file = base_path + ".mp3"
 
-        # =====================
-        # MP4 (DEFAULT 720p – PALING STABIL)
-        # =====================
+        # ===== MP4 MODE =====
         else:
-            if has_ffmpeg():
-                ydl_opts = {
-                    **BASE_YDL_OPTS,
-                    "format": "bv*[height<=720]+ba/b[height<=720]/best",
-                    "merge_output_format": "mp4",
-                    "outtmpl": base_path + ".%(ext)s",
-                }
-            else:
-                ydl_opts = {
-                    **BASE_YDL_OPTS,
-                    "format": "best[ext=mp4]/best",
-                    "outtmpl": base_path + ".%(ext)s",
-                }
-
+            ydl_opts = {
+                **BASE_YDL_OPTS,
+                "format": "bv*[height<=1080]+ba/best",
+                "merge_output_format": "mp4",
+                "outtmpl": base_path + ".%(ext)s",
+            }
             final_file = base_path + ".mp4"
 
-        # =====================
-        # DOWNLOAD
-        # =====================
+        # ===== DOWNLOAD =====
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 ydl.download([url])
         except Exception:
-            # 🔁 FALLBACK
+            # fallback total
             ydl_opts["format"] = "best"
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 ydl.download([url])
 
         if not os.path.exists(final_file):
-            return "File gagal dibuat"
+            return "File gagal dibuat", 500
 
-        # =====================
-        # AUTO DELETE
-        # =====================
+        # ===== AUTO DELETE =====
         @after_this_request
         def remove_file(response):
             try:
@@ -176,10 +149,17 @@ def download():
         return send_file(final_file, as_attachment=True)
 
     except yt_dlp.utils.DownloadError as e:
-        msg = str(e)
-        if "login" in msg.lower():
-            return "Platform meminta login. Pastikan cookies.txt valid."
-        return f"Download error: {msg}"
+        msg = str(e).lower()
+        if "sign in" in msg or "login" in msg:
+            return "YouTube meminta login. Gunakan cookies.txt.", 403
+        return f"Download error: {e}", 500
 
     except Exception as e:
-        return f"Download error: {str(e)}"
+        return f"Server error: {e}", 500
+
+
+# ===============================
+# MAIN
+# ===============================
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=8080)
