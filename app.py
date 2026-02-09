@@ -140,7 +140,8 @@ def download():
             else:
                 ydl_opts = {
                     **BASE_YDL_OPTS,
-                    "format": "best[ext=mp4]/best",
+                    "format": "bv*[height<=1080]+ba/best",
+                    "merge_output_format": "mp4",
                     "outtmpl": base_path + ".%(ext)s",
                 }
 
